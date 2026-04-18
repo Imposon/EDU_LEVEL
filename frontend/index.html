@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Tutor</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .upload-section {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .chat-section {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .file-input {
+            margin: 10px 0;
+            padding: 10px;
+            border: 2px dashed #ccc;
+            border-radius: 4px;
+            text-align: center;
+        }
+        .chat-messages {
+            height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin: 10px 0;
+            background-color: #fafafa;
+        }
+        .message {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 8px;
+        }
+        .user-message {
+            background-color: #e3f2fd;
+            text-align: right;
+        }
+        .assistant-message {
+            background-color: #f3e5f5;
+        }
+        .input-area {
+            display: flex;
+            gap: 10px;
+            margin: 10px 0;
+        }
+        .input-area input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .btn {
+            padding: 10px 20px;
+            background-color: #1976d2;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .btn:hover {
+            background-color: #1565c0;
+        }
+        .hidden {
+            display: none;
+        }
+        .image-result {
+            margin: 10px 0;
+            text-align: center;
+        }
+        .image-result img {
+            max-width: 300px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎓 AI Tutor</h1>
+    <div class="container">
+        <div class="upload-section">
+            <h2>📚 Upload Materials</h2>
+            
+            <div class="file-input">
+                <input type="file" id="pdfInput" accept=".pdf">
+                <label for="pdfInput">📄 Choose PDF File</label>
+            </div>
+            
+            <div class="file-input">
+                <input type="file" id="imagesInput" accept="image/*" multiple>
+                <label for="imagesInput">🖼️ Choose Images</label>
+            </div>
+            
+            <button class="btn" onclick="uploadFiles()">⬆️ Upload Files</button>
+            
+            <div id="uploadStatus" class="status hidden"></div>
+        </div>
+        
+        <div class="chat-section">
+            <h2>💬 Ask Questions</h2>
+            
+            <div id="chatMessages" class="chat-messages"></div>
+            
+            <div class="input-area">
+                <input type="text" id="questionInput" placeholder="Ask a question about your materials..." onkeypress="handleKeyPress(event)">
+                <button class="btn" onclick="askQuestion()">➤ Send</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script>
+        let currentTopicId = null;
+
+        function showStatus(message, isError = false) {
+            const statusDiv = document.getElementById('uploadStatus');
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${isError ? 'error' : 'success'}`;
+            statusDiv.classList.remove('hidden');
+        }
+
+        function addMessage(content, isUser = false, imageUrl = null) {
+            const messagesDiv = document.getElementById('chatMessages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${isUser ? 'user-message' : 'assistant-message'}`;
+            
+            messageDiv.innerHTML = `
+                <div>${content}</div>
+                ${imageUrl ? `<div class="image-result"><img src="${imageUrl}" alt="Relevant diagram"></div>` : ''}
+            `;
+            
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        async function uploadFiles() {
+            const pdfInput = document.getElementById('pdfInput');
+            const imagesInput = document.getElementById('imagesInput');
+            
+            if (!pdfInput.files[0]) {
+                showStatus('Please select a PDF file', true);
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('pdf', pdfInput.files[0]);
+            
+            for (let i = 0; i < imagesInput.files.length; i++) {
+                formData.append('images', imagesInput.files[i]);
+            }
+
+            try {
+                showStatus('Uploading and processing files...');
+                
+                const response = await axios.post('http://localhost:8000/upload', formData, {
+                    headers: {
+                        'Content-Type': 'multipart/form-data'
+                    }
+                });
+
+                currentTopicId = response.data.topicId;
+                showStatus(`✅ Successfully processed ${response.data.chunksCount} text chunks and ${response.data.imagesCount} images`);
+                
+                // Clear inputs
+                pdfInput.value = '';
+                imagesInput.value = '';
+                
+            } catch (error) {
+                showStatus(`❌ Upload failed: ${error.response?.data?.detail || error.message}`, true);
+            }
+        }
+
+        async function askQuestion() {
+            const questionInput = document.getElementById('questionInput');
+            const question = questionInput.value.trim();
+            
+            if (!question) {
+                return;
+            }
+
+            if (!currentTopicId) {
+                showStatus('Please upload files first', true);
+                return;
+            }
+
+            // Add user message
+            addMessage(question, true);
+            questionInput.value = '';
+
+            try {
+                const response = await axios.post('http://localhost:8000/chat', {
+                    topicId: currentTopicId,
+                    query: question
+                });
+
+                // Add assistant response
+                addMessage(response.data.answer, false);
+                
+            } catch (error) {
+                addMessage(`❌ Error: ${error.response?.data?.detail || error.message}`, false);
+            }
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                askQuestion();
+            }
+        }
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            // Check backend health
+            axios.get('http://localhost:8000/health')
+                .then(response => {
+                    console.log('Backend is healthy');
+                })
+                .catch(error => {
+                    showStatus('❌ Backend not available. Please start the backend server.', true);
+                });
+        });
+    </script>
+</body>
+</html>
