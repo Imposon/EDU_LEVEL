@@ -226,7 +226,11 @@
                 });
 
                 // Add assistant response
-                addMessage(response.data.answer, false);
+                let imageUrl = null;
+                if (response.data.relevant_image) {
+                    imageUrl = `http://localhost:8000/image-file/${currentTopicId}/${response.data.relevant_image.id}`;
+                }
+                addMessage(response.data.answer, false, imageUrl);
                 
             } catch (error) {
                 addMessage(`❌ Error: ${error.response?.data?.detail || error.message}`, false);

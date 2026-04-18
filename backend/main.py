@@ -1,6 +1,6 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse
 import uvicorn
 import os
 import uuid
@@ -314,10 +314,30 @@ Answer:"""
                 else:
                     answer = "No relevant information found in the document."
         
+        # Retrieve relevant image
+        relevant_image = None
+        image_index = topic_data.get("image_index")
+        image_ids = topic_data.get("image_ids", [])
+        image_metadata = topic_data.get("image_metadata", {})
+        
+        if image_index is not None and len(image_ids) > 0 and answer:
+            # Create embedding from the generated answer
+            ans_embedding = embedding_model.encode([answer], convert_to_numpy=True)
+            ans_embedding = ans_embedding / np.linalg.norm(ans_embedding, axis=1, keepdims=True)
+            
+            # Search
+            img_scores, img_indices = image_index.search(ans_embedding.astype(np.float32), 1)
+            if len(img_indices[0]) > 0 and img_indices[0][0] >= 0:
+                idx = img_indices[0][0]
+                if idx < len(image_ids):
+                    img_id = image_ids[idx]
+                    relevant_image = image_metadata.get(img_id)
+        
         return JSONResponse(content={
             "answer": answer,
             "chunks": retrieved_chunks,
-            "chunksCount": len(retrieved_chunks)
+            "chunksCount": len(retrieved_chunks),
+            "relevant_image": relevant_image
         })
         
     except Exception as e:
@@ -340,6 +360,18 @@ async def get_images(topic_id: str):
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get images: {str(e)}")
+
+@app.get("/image-file/{topic_id}/{image_id}")
+async def get_image_file(topic_id: str, image_id: str):
+    """Serve an image file."""
+    if topic_id in topics_storage:
+        topic_data = topics_storage[topic_id]
+        image_paths = topic_data.get("image_paths", {})
+        if image_id in image_paths:
+            path = image_paths[image_id]
+            if os.path.exists(path):
+                return FileResponse(path)
+    raise HTTPException(status_code=404, detail="Image not found")
 
 @app.get("/")
 async def root():
