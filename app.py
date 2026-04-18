@@ -455,7 +455,7 @@ def render_upload_section():
                     if image_data:
                         try:
                             # Create index
-                            index, metadata_map, path_map = create_image_index(image_data)
+                            index, metadata_map, path_map, image_ids = create_image_index(image_data)
                             st.session_state["image_index"] = index
                             st.session_state["image_metadata"] = metadata_map
                             st.session_state["image_paths"] = path_map
