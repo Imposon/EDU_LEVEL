@@ -384,6 +384,86 @@ def render_upload_section():
                     else:
                         st.error("No images could be processed")
                         st.session_state["images_processed"] = False
+    
+    st.divider()
+    st.subheader("3. Sample Data")
+    if st.button("🎵 Load Sound Chapter Sample", type="secondary"):
+        with st.spinner("Loading sample data..."):
+            sample_dir = os.path.join(os.getcwd(), "sample_data")
+            pdf_path = os.path.join(sample_dir, "Sound.pdf")
+            
+            if os.path.exists(pdf_path):
+                # Process PDF
+                with open(pdf_path, "rb") as f:
+                    text = extract_text_from_pdf(f)
+                
+                if text.strip():
+                    chunks = chunk_text(text)
+                    index, chunk_map = create_text_index(chunks)
+                    st.session_state["text_index"] = index
+                    st.session_state["text_chunks"] = chunk_map
+                    st.session_state["pdf_processed"] = True
+                    
+                    # Process Images
+                    if st.session_state["temp_dir"] is None:
+                        st.session_state["temp_dir"] = tempfile.mkdtemp()
+                    
+                    image_data = []
+                    for filename in os.listdir(sample_dir):
+                        if filename.endswith((".png", ".jpg", ".jpeg")) and filename != "Sound.pdf":
+                            file_path = os.path.join(sample_dir, filename)
+                            with open(file_path, "rb") as f:
+                                # We need a file-like object with a .name attribute for process_image
+                                class NamedBytesIO:
+                                    def __init__(self, content, name):
+                                        self.content = content
+                                        self.name = name
+                                    def read(self):
+                                        return self.content
+                                    def seek(self, pos):
+                                        pass
+                                
+                                # Actually process_image takes a file object
+                                # Let's just do it manually or adapt process_image
+                                # But process_image is already there. Let's use it.
+                                # Streamlit's file_uploader returns a UploadedFile which has .name
+                                # We can just pass the path and modify process_image or do it here.
+                                
+                                image = Image.open(file_path).convert("RGB")
+                                image_id = str(uuid.uuid4())
+                                
+                                title = os.path.splitext(filename)[0].replace("_", " ").replace("-", " ")
+                                description = f"Educational diagram showing {title.lower()}"
+                                words = title.lower().replace("_", " ").replace("-", " ").split()
+                                keywords = [w.strip(".,!?;:") for w in words if len(w) > 2]
+                                
+                                metadata = {
+                                    "id": image_id,
+                                    "filename": filename,
+                                    "title": title,
+                                    "description": description,
+                                    "keywords": list(set(keywords))[:8],
+                                }
+                                
+                                target_path = os.path.join(st.session_state["temp_dir"], f"{image_id}.png")
+                                image.save(target_path)
+                                
+                                embedding_input = f"{metadata['title']} {metadata['description']} {' '.join(metadata['keywords'])}"
+                                image_data.append((image_id, metadata, target_path, embedding_input))
+                    
+                    if image_data:
+                        idx, m_map, p_map, ids = create_image_index(image_data)
+                        st.session_state["image_index"] = idx
+                        st.session_state["image_metadata"] = m_map
+                        st.session_state["image_paths"] = p_map
+                        st.session_state["images_processed"] = True
+                        
+                    st.success(f"✅ Loaded Sound sample: {len(chunks)} text chunks and {len(image_data)} images")
+                    st.rerun()
+                else:
+                    st.error("No text found in sample PDF")
+            else:
+                st.error("Sample data not found")
 
 def render_chat_section():
     st.header("💬 Ask Your AI Tutor")

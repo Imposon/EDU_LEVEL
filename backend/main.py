@@ -187,6 +187,78 @@ async def upload_pdf_and_images(pdf: UploadFile = File(...), images: List[Upload
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
+@app.post("/upload-sample")
+async def upload_sample_data():
+    """Load sample data from sample_data directory."""
+    try:
+        sample_dir = os.path.join(os.getcwd(), "sample_data")
+        if not os.path.exists(sample_dir):
+            raise HTTPException(status_code=404, detail="Sample data directory not found")
+        
+        pdf_path = os.path.join(sample_dir, "Sound.pdf")
+        if not os.path.exists(pdf_path):
+            raise HTTPException(status_code=404, detail="Sound.pdf not found in sample_data")
+        
+        temp_dir = tempfile.mkdtemp()
+        topic_id = str(uuid.uuid4())
+        
+        target_pdf = os.path.join(temp_dir, "Sound.pdf")
+        shutil.copy2(pdf_path, target_pdf)
+        
+        text = extract_text_from_pdf(target_pdf)
+        text_chunks = chunk_text(text)
+        text_index = create_text_index(text_chunks)
+        
+        image_data = []
+        for filename in os.listdir(sample_dir):
+            if filename.endswith((".png", ".jpg", ".jpeg")) and filename != "Sound.pdf":
+                file_path = os.path.join(sample_dir, filename)
+                
+                image_id = str(uuid.uuid4())
+                target_img = os.path.join(temp_dir, f"{image_id}.png")
+                shutil.copy2(file_path, target_img)
+                
+                title = os.path.splitext(filename)[0].replace("_", " ").replace("-", " ")
+                description = f"Educational diagram showing {title.lower()}"
+                words = title.lower().replace("_", " ").replace("-", " ").split()
+                keywords = [w.strip(".,!?;:") for w in words if len(w) > 2]
+                
+                img_metadata = {
+                    "id": image_id,
+                    "filename": filename,
+                    "title": title,
+                    "description": description,
+                    "keywords": list(set(keywords))[:8],
+                    "path": target_img
+                }
+                image_data.append(img_metadata)
+        
+        image_index = create_image_index(image_data)
+        
+        topic_data = {
+            "id": topic_id,
+            "text_chunks": text_chunks,
+            "text_index": text_index,
+            "image_metadata": {img["id"]: img for img in image_data if img},
+            "image_index": image_index,
+            "image_paths": {img["id"]: img["path"] for img in image_data if img},
+            "image_ids": [img["id"] for img in image_data if img]
+        }
+        
+        topics_storage[topic_id] = topic_data
+        text_indexes[topic_id] = text_index
+        image_indexes[topic_id] = image_index
+        
+        return JSONResponse(content={
+            "topicId": topic_id,
+            "message": "Successfully loaded Sound sample data",
+            "chunksCount": len(text_chunks),
+            "imagesCount": len(image_data)
+        })
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to load sample: {str(e)}")
+
 @app.post("/chat")
 async def chat(request: dict):
     """Chat endpoint - retrieve chunks and generate answer."""

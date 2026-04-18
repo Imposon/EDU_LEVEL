@@ -124,6 +124,7 @@
             </div>
             
             <button class="btn" onclick="uploadFiles()">⬆️ Upload Files</button>
+            <button class="btn" style="background-color: #4caf50; margin-left: 10px;" onclick="loadSample()">🎵 Load Sound Sample</button>
             
             <div id="uploadStatus" class="status hidden"></div>
         </div>
@@ -198,6 +199,20 @@
                 
             } catch (error) {
                 showStatus(`❌ Upload failed: ${error.response?.data?.detail || error.message}`, true);
+            }
+        }
+
+        async function loadSample() {
+            try {
+                showStatus('Loading sound sample data...');
+                
+                const response = await axios.post('http://localhost:8000/upload-sample');
+
+                currentTopicId = response.data.topicId;
+                showStatus(`✅ Successfully loaded Sound sample: ${response.data.chunksCount} chunks and ${response.data.imagesCount} images`);
+                
+            } catch (error) {
+                showStatus(`❌ Failed to load sample: ${error.response?.data?.detail || error.message}`, true);
             }
         }
 
