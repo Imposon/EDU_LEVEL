@@ -231,6 +231,11 @@ async def chat(request: dict):
             if idx >= 0 and idx < len(text_chunks):
                 retrieved_chunks.append(text_chunks[idx])
         
+        # Limit context length to avoid API limits (max ~2000 chars)
+        context = "\n\n".join(retrieved_chunks[:2])  # Use only top 2 most relevant chunks
+        if len(context) > 1500:
+            context = context[:1500] + "\n\n[Context truncated for API limits...]"
+        
         # Generate answer using Groq API
         context = "\n\n".join(retrieved_chunks)
         
@@ -274,7 +279,7 @@ Answer:"""
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_prompt}
                     ],
-                    "max_tokens": 1000,
+                    "max_tokens": 800,  # Reduced from 1000
                     "temperature": 0.1
                 }
                 
