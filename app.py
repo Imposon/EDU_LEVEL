@@ -289,17 +289,12 @@ def generate_groq_answer(query: str, context: str) -> str:
     # Use default key if no custom key provided
     if not api_key:
         api_key = os.getenv("GROQ_API_KEY", "")
-        if api_key:
-            st.write("Debug: Using API key from .env")
-        else:
+        if not api_key:
             return "Please enter your Groq API key in sidebar or add GROQ_API_KEY to .env file."
-    else:
-        st.write("Debug: Using custom API key")
     
     try:
         # Groq API endpoint
         url = "https://api.groq.com/openai/v1/chat/completions"
-        st.write(f"Debug: Calling API at {url}")  # Debug line
         
         headers = {
             "Authorization": f"Bearer {api_key}",
@@ -336,9 +331,6 @@ Answer:"""
             "max_tokens": 800,
             "temperature": 0.1
         }
-        
-        st.write(f"Debug: Request data: {json.dumps(data, indent=2)}")  # Debug line
-        st.write(f"Debug: API Key (first 10 chars): {api_key[:10]}...")  # Debug line
         
         response = requests.post(url, headers=headers, json=data, timeout=30)
         response.raise_for_status()
