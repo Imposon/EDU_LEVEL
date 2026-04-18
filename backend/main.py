@@ -36,7 +36,7 @@ EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 CHUNK_SIZE = 400
 CHUNK_OVERLAP = 50
 DIMENSION = 384
-TOP_K_TEXT = 5
+TOP_K_TEXT = 3
 
 # Global storage (in production, use database)
 topics_storage = {}
@@ -183,7 +183,8 @@ async def upload_pdf_and_images(pdf: UploadFile = File(...), images: List[Upload
             "text_index": text_index,
             "image_metadata": {img["id"]: img for img in image_data if img},
             "image_index": image_index,
-            "image_paths": {img["id"]: img["path"] for img in image_data if img}
+            "image_paths": {img["id"]: img["path"] for img in image_data if img},
+            "image_ids": [img["id"] for img in image_data if img]  # Store order for retrieval
         }
         
         topics_storage[topic_id] = topic_data
@@ -232,9 +233,9 @@ async def chat(request: dict):
                 retrieved_chunks.append(text_chunks[idx])
         
         # Limit context length to avoid API limits (max ~2000 chars)
-        context = "\n\n".join(retrieved_chunks[:2])  # Use only top 2 most relevant chunks
-        if len(context) > 1500:
-            context = context[:1500] + "\n\n[Context truncated for API limits...]"
+        context = "\n\n".join(retrieved_chunks[:3])  # Use only top 3 most relevant chunks
+        if len(context) > 1200:  # Reduced from 1500
+            context = context[:1200] + "\n\n[Context truncated for API limits...]"
         
         # Generate answer using Groq API
         context = "\n\n".join(retrieved_chunks)
@@ -264,7 +265,17 @@ async def chat(request: dict):
                     "Content-Type": "application/json"
                 }
                 
-                system_prompt = """You are an AI tutor. Answer ONLY using the provided context. If the information is not found in the context, say 'Not found in document'. Be concise and helpful."""
+                system_prompt = """You are an expert AI tutor teaching students about sound and physics.
+
+Rules:
+1. Answer ONLY from the provided context
+2. Do NOT copy text directly - explain in your own words
+3. Structure answers clearly:
+   - Definition first
+   - Simple explanation
+   - Example if relevant
+4. If not found, say: "Not found in document"
+5. Be concise but thorough"""
                 
                 user_prompt = f"""Context:
 {context}
