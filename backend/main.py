@@ -12,6 +12,7 @@ import numpy as np
 import faiss
 from sentence_transformers import SentenceTransformer
 import fitz  # PyMuPDF
+from dataclasses import dataclass
 from PIL import Image
 import requests
 from dotenv import load_dotenv
@@ -285,7 +286,7 @@ Question: {query}
 Answer:"""
                 
                 data = {
-                    "model": "llama3-70b-8192",
+                    "model": "llama-3.3-70b-versatile",
                     "messages": [
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_prompt}

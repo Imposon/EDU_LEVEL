@@ -28,7 +28,7 @@ EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 BLIP_MODEL = "Salesforce/blip-image-captioning-base"
 CHUNK_SIZE = 400
 CHUNK_OVERLAP = 50
-TOP_K_TEXT = 5
+TOP_K_TEXT = 3
 TOP_K_IMAGE = 1
 DIMENSION = 384  # all-MiniLM-L6-v2 dimension
 
@@ -50,7 +50,7 @@ def init_session_state():
         "temp_dir": None,
         "groq_api_key": os.getenv("GROQ_API_KEY", ""),
         "gemini_api_key": "",
-        "selected_model": "mock",
+        "selected_model": "groq",
         # "blip_processor": None,  # Disabled for stability
         # "blip_model": None,      # Disabled for stability
     }
@@ -188,7 +188,7 @@ def process_image(image_file, temp_dir: str) -> Tuple[str, Dict, str]:
     
     return image_id, metadata, image_path, embedding_input
 
-def create_image_index(image_data: List[Tuple]) -> Tuple[faiss.IndexFlatIP, Dict[str, Dict], Dict[str, str]]:
+def create_image_index(image_data: List[Tuple]) -> Tuple[faiss.IndexFlatIP, Dict[str, Dict], Dict[str, str], List[str]]:
     """Create FAISS index for images."""
     model = st.session_state["embedding_model"]
     
@@ -203,8 +203,9 @@ def create_image_index(image_data: List[Tuple]) -> Tuple[faiss.IndexFlatIP, Dict
     # Create mappings
     metadata_map = {data[0]: data[1] for data in image_data}
     path_map = {data[0]: data[2] for data in image_data}
+    image_ids = [data[0] for data in image_data]  # Store order for retrieval
     
-    return index, metadata_map, path_map
+    return index, metadata_map, path_map, image_ids
 
 # ==================== RAG PIPELINE ====================
 def retrieve_text_chunks(query: str, k: int = TOP_K_TEXT) -> List[str]:
@@ -251,8 +252,10 @@ def retrieve_relevant_image(text: str, k: int = TOP_K_IMAGE) -> Optional[Tuple[s
 
 def generate_answer(query: str, context_chunks: List[str]) -> str:
     """Generate answer using retrieved context and selected LLM."""
-    # Combine context
-    context = "\n\n".join(context_chunks)
+    # Combine context - limit to top 3 chunks for better quality
+    context = "\n\n".join(context_chunks[:3])
+    if len(context) > 1500:
+        context = context[:1500] + "\n\n[Context truncated...]"
     
     # Get selected model and API key
     selected_model = st.session_state.get("selected_model", "mock")
@@ -304,7 +307,18 @@ def generate_groq_answer(query: str, context: str) -> str:
         }
         
         # Prompt for Groq
-        system_prompt = """You are an AI tutor. Answer ONLY using the provided context. If the information is not found in the context, say 'Not found in document'. Be concise and helpful."""
+        system_prompt = """You are an expert AI tutor teaching students.
+
+Rules:
+1. Answer ONLY from the provided context.
+2. Do NOT copy text directly - explain in your own words.
+3. Explain in simple, clear terms like teaching a student.
+4. Structure your answer:
+   - Definition
+   - Explanation
+   - Example (if relevant)
+5. If not found, say "Not found in document"
+6. Be concise but thorough"""
         
         user_prompt = f"""Context:
 {context}
@@ -314,12 +328,12 @@ Question: {query}
 Answer:"""
         
         data = {
-            "model": "llama3-70b-8192",
+            "model": "llama-3.3-70b-versatile",
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ],
-            "max_tokens": 1000,
+            "max_tokens": 800,
             "temperature": 0.1
         }
         
