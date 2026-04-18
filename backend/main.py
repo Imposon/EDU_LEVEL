@@ -231,20 +231,71 @@ async def chat(request: dict):
             if idx >= 0 and idx < len(text_chunks):
                 retrieved_chunks.append(text_chunks[idx])
         
-        # Generate answer (mock implementation - replace with actual LLM call)
+        # Generate answer using Groq API
         context = "\n\n".join(retrieved_chunks)
         
-        # Mock answer for demo
-        if retrieved_chunks:
-            answer = f"""Based on the provided context:
+        # Get Groq API key from environment
+        groq_api_key = os.getenv("GROQ_API_KEY", "")
+        
+        if not groq_api_key:
+            # Fallback to mock response
+            if retrieved_chunks:
+                answer = f"""Based on the provided context:
 
 {retrieved_chunks[0][:500] if retrieved_chunks else "No information found."}
 
 {'Additional context: ' + retrieved_chunks[1][:300] if len(retrieved_chunks) > 1 else ''}
 
 [This is a demo response. Integrate with actual LLM for production.]"""
+            else:
+                answer = "No relevant information found in the document."
         else:
-            answer = "No relevant information found in the document."
+            # Call Groq API
+            try:
+                url = "https://api.groq.com/openai/v1/chat/completions"
+                
+                headers = {
+                    "Authorization": f"Bearer {groq_api_key}",
+                    "Content-Type": "application/json"
+                }
+                
+                system_prompt = """You are an AI tutor. Answer ONLY using the provided context. If the information is not found in the context, say 'Not found in document'. Be concise and helpful."""
+                
+                user_prompt = f"""Context:
+{context}
+
+Question: {query}
+
+Answer:"""
+                
+                data = {
+                    "model": "llama3-70b-8192",
+                    "messages": [
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    "max_tokens": 1000,
+                    "temperature": 0.1
+                }
+                
+                response = requests.post(url, headers=headers, json=data, timeout=30)
+                response.raise_for_status()
+                
+                result = response.json()
+                answer = result["choices"][0]["message"]["content"].strip()
+                
+            except Exception as e:
+                answer = f"Error calling Groq API: {str(e)}"
+                if retrieved_chunks:
+                    answer = f"""Based on the provided context:
+
+{retrieved_chunks[0][:500] if retrieved_chunks else "No information found."}
+
+{'Additional context: ' + retrieved_chunks[1][:300] if len(retrieved_chunks) > 1 else ''}
+
+[API Error: {str(e)}]"""
+                else:
+                    answer = "No relevant information found in the document."
         
         return JSONResponse(content={
             "answer": answer,
