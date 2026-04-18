@@ -310,15 +310,15 @@ def generate_groq_answer(query: str, context: str) -> str:
         system_prompt = """You are an expert AI tutor teaching students.
 
 Rules:
-1. Answer ONLY from the provided context.
+1. Answer ONLY from the provided context. However, be smart about matching concepts: if the user asks about a combined word like "SchoolBellVibration", map it to "school bell" and "vibration" in the text.
 2. Do NOT copy text directly - explain in your own words.
 3. Explain in simple, clear terms like teaching a student.
 4. Structure your answer:
    - Definition
    - Explanation
    - Example (if relevant)
-5. If not found, say "Not found in document"
-6. Be concise but thorough"""
+5. If the fundamental concept is not found at all, say "Not found in document".
+6. Be concise but thorough."""
         
         user_prompt = f"""Context:
 {context}

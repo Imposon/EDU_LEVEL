@@ -269,13 +269,13 @@ async def chat(request: dict):
                 system_prompt = """You are an expert AI tutor teaching students about sound and physics.
 
 Rules:
-1. Answer ONLY from the provided context
+1. Answer ONLY from the provided context. However, be smart about matching concepts: if the user asks about a combined word like "SchoolBellVibration", map it to "school bell" and "vibration" in the text.
 2. Do NOT copy text directly - explain in your own words
 3. Structure answers clearly:
    - Definition first
    - Simple explanation
    - Example if relevant
-4. If not found, say: "Not found in document"
+4. If the fundamental concept is not found, say: "Not found in document"
 5. Be concise but thorough"""
                 
                 user_prompt = f"""Context:
