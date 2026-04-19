@@ -11,19 +11,16 @@ from typing import List, Dict, Optional
 import numpy as np
 import faiss
 from sentence_transformers import SentenceTransformer
-import fitz  # PyMuPDF
+import fitz
 from dataclasses import dataclass
 from PIL import Image
 import requests
 from dotenv import load_dotenv
 
-# Load environment variables
 load_dotenv()
 
-# Initialize FastAPI app
 app = FastAPI(title="AI Tutor Backend", version="1.0.0")
 
-# Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -32,19 +29,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Configuration
 EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 CHUNK_SIZE = 400
 CHUNK_OVERLAP = 50
 DIMENSION = 384
 TOP_K_TEXT = 3
 
-# Global storage (in production, use database)
 topics_storage = {}
 text_indexes = {}
 image_indexes = {}
 
-# Initialize embedding model
 @dataclass
 class TopicData:
     id: str
@@ -54,7 +48,6 @@ class TopicData:
     image_index: faiss.IndexFlatIP
     image_paths: Dict[str, str]
 
-# Initialize embedding model
 embedding_model = SentenceTransformer(EMBEDDING_MODEL)
 
 def extract_text_from_pdf(pdf_path: str) -> str:
@@ -94,19 +87,16 @@ def create_text_index(chunks: List[str]) -> faiss.IndexFlatIP:
 def process_image(image_file: UploadFile, temp_dir: str) -> Dict:
     """Process single image and generate metadata."""
     try:
-        # Save image
         image_id = str(uuid.uuid4())
         image_path = os.path.join(temp_dir, f"{image_id}.png")
         
         with open(image_path, "wb") as f:
             shutil.copyfileobj(image_file.file, f)
         
-        # Generate metadata from filename
         filename = image_file.filename
         title = os.path.splitext(filename)[0].replace("_", " ").replace("-", " ")
         description = f"Educational diagram showing {title.lower()}"
         
-        # Extract keywords from filename
         words = title.lower().replace("_", " ").replace("-", " ").split()
         keywords = [w.strip(".,!?;:") for w in words if len(w) > 2 and w not in ["the", "and", "of", "in", "on", "at", "to", "for"]]
         keywords = list(set(keywords))[:8]
@@ -150,34 +140,27 @@ def create_image_index(image_data: List[Dict]) -> faiss.IndexFlatIP:
 async def upload_pdf_and_images(pdf: UploadFile = File(...), images: List[UploadFile] = File([])):
     """Upload PDF and images, extract text and create embeddings."""
     try:
-        # Create temporary directory
         temp_dir = tempfile.mkdtemp()
         
-        # Process PDF
         topic_id = str(uuid.uuid4())
         pdf_path = os.path.join(temp_dir, pdf.filename)
         
         with open(pdf_path, "wb") as f:
             shutil.copyfileobj(pdf.file, f)
         
-        # Extract and chunk text
         text = extract_text_from_pdf(pdf_path)
         text_chunks = chunk_text(text)
         
-        # Create text index
         text_index = create_text_index(text_chunks)
         
-        # Process images
         image_data = []
         for image_file in images:
             img_metadata = process_image(image_file, temp_dir)
             if img_metadata:
                 image_data.append(img_metadata)
         
-        # Create image index
         image_index = create_image_index(image_data)
         
-        # Store topic data
         topic_data = {
             "id": topic_id,
             "text_chunks": text_chunks,
@@ -185,14 +168,13 @@ async def upload_pdf_and_images(pdf: UploadFile = File(...), images: List[Upload
             "image_metadata": {img["id"]: img for img in image_data if img},
             "image_index": image_index,
             "image_paths": {img["id"]: img["path"] for img in image_data if img},
-            "image_ids": [img["id"] for img in image_data if img]  # Store order for retrieval
+            "image_ids": [img["id"] for img in image_data if img]
         }
         
         topics_storage[topic_id] = topic_data
         text_indexes[topic_id] = text_index
         image_indexes[topic_id] = image_index
         
-        # Clean up temp directory
         shutil.rmtree(temp_dir)
         
         return JSONResponse(content={
@@ -222,7 +204,6 @@ async def chat(request: dict):
         text_index = topic_data["text_index"]
         text_chunks = topic_data["text_chunks"]
         
-        # Retrieve relevant chunks
         query_embedding = embedding_model.encode([query], convert_to_numpy=True)
         query_embedding = query_embedding / np.linalg.norm(query_embedding, axis=1, keepdims=True)
         
@@ -233,19 +214,15 @@ async def chat(request: dict):
             if idx >= 0 and idx < len(text_chunks):
                 retrieved_chunks.append(text_chunks[idx])
         
-        # Limit context length to avoid API limits (max ~2000 chars)
-        context = "\n\n".join(retrieved_chunks[:3])  # Use only top 3 most relevant chunks
-        if len(context) > 1200:  # Reduced from 1500
+        context = "\n\n".join(retrieved_chunks[:3])
+        if len(context) > 1200:
             context = context[:1200] + "\n\n[Context truncated for API limits...]"
         
-        # Generate answer using Groq API
         context = "\n\n".join(retrieved_chunks)
         
-        # Get Groq API key from environment
         groq_api_key = os.getenv("GROQ_API_KEY", "")
         
         if not groq_api_key:
-            # Fallback to mock response
             if retrieved_chunks:
                 answer = f"""Based on the provided context:
 
@@ -257,7 +234,6 @@ async def chat(request: dict):
             else:
                 answer = "No relevant information found in the document."
         else:
-            # Call Groq API
             try:
                 url = "https://api.groq.com/openai/v1/chat/completions"
                 
@@ -291,7 +267,7 @@ Answer:"""
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_prompt}
                     ],
-                    "max_tokens": 800,  # Reduced from 1000
+                    "max_tokens": 800,
                     "temperature": 0.1
                 }
                 
@@ -314,18 +290,15 @@ Answer:"""
                 else:
                     answer = "No relevant information found in the document."
         
-        # Retrieve relevant image
         relevant_image = None
         image_index = topic_data.get("image_index")
         image_ids = topic_data.get("image_ids", [])
         image_metadata = topic_data.get("image_metadata", {})
         
         if image_index is not None and len(image_ids) > 0 and answer:
-            # Create embedding from the generated answer
             ans_embedding = embedding_model.encode([answer], convert_to_numpy=True)
             ans_embedding = ans_embedding / np.linalg.norm(ans_embedding, axis=1, keepdims=True)
             
-            # Search
             img_scores, img_indices = image_index.search(ans_embedding.astype(np.float32), 1)
             if len(img_indices[0]) > 0 and img_indices[0][0] >= 0:
                 idx = img_indices[0][0]

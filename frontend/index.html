@@ -193,7 +193,6 @@
                 currentTopicId = response.data.topicId;
                 showStatus(`✅ Successfully processed ${response.data.chunksCount} text chunks and ${response.data.imagesCount} images`);
                 
-                // Clear inputs
                 pdfInput.value = '';
                 imagesInput.value = '';
                 
@@ -215,7 +214,6 @@
                 return;
             }
 
-            // Add user message
             addMessage(question, true);
             questionInput.value = '';
 
@@ -225,7 +223,6 @@
                     query: question
                 });
 
-                // Add assistant response
                 let imageUrl = null;
                 if (response.data.relevant_image) {
                     imageUrl = `http://localhost:8000/image-file/${currentTopicId}/${response.data.relevant_image.id}`;
@@ -243,9 +240,7 @@
             }
         }
 
-        // Initialize
         document.addEventListener('DOMContentLoaded', function() {
-            // Check backend health
             axios.get('http://localhost:8000/health')
                 .then(response => {
                     console.log('Backend is healthy');
